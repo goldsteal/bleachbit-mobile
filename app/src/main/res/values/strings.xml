@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BleachBit Mobile</string>
+    <string name="back">Back</string>
+    <string name="privilege_line">Privilege: %1$s</string>
+    <string name="no_clean_yet">No clean has been run yet.</string>
+    <string name="last_run_line">Last clean: %1$s, freed %2$s</string>
+    <string name="home_body">Choose cleaners, preview what will be removed, then confirm. Nothing is selected for you, and the app does not scan until you ask.</string>
+
+    <string name="title_clean">Clean</string>
+    <string name="title_preview">Preview</string>
+    <string name="title_result">Result</string>
+    <string name="title_run_log">Run log</string>
+    <string name="title_settings">Settings</string>
+    <string name="title_whitelist">Never clean</string>
+
+    <string name="action_clean">Clean</string>
+    <string name="action_scan">Scan</string>
+    <string name="action_clean_selected">Clean selected</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_done">Done</string>
+    <string name="action_never_clean">Never clean</string>
+    <string name="action_remove">Remove</string>
+
+    <string name="risk_review">Review before cleaning</string>
+    <string name="risk_expert">Expert</string>
+
+    <string name="scanning">Scanning…</string>
+    <string name="cleaning">Cleaning…</string>
+
+    <string name="clipboard_finding">Current clipboard contents</string>
+    <string name="nothing_found">Nothing to clean was found.</string>
+    <string name="note_media_read_denied">Media access was not granted, so only trash created by this app is shown.</string>
+    <string name="note_downloads_own_only">Android only lets this app see downloads it created itself. Other apps\' downloads are not shown.</string>
+    <string name="note_trash_failed">The trash could not be read.</string>
+    <string name="note_downloads_failed">Downloads could not be read.</string>
+    <string name="policy_errors_title">Refused by the safety policy</string>
+    <string name="policy_error_line">%1$s: %2$s</string>
+
+    <plurals name="selected_summary">
+        <item quantity="one">%1$d item selected, %2$s</item>
+        <item quantity="other">%1$d items selected, %2$s</item>
+    </plurals>
+    <string name="confirm_title">Delete permanently?</string>
+    <plurals name="confirm_body">
+        <item quantity="one">%1$d item (%2$s) will be deleted. This cannot be undone.</item>
+        <item quantity="other">%1$d items (%2$s) will be deleted. This cannot be undone.</item>
+    </plurals>
+
+    <plurals name="result_summary">
+        <item quantity="one">Removed %1$d item and freed %2$s.</item>
+        <item quantity="other">Removed %1$d items and freed %2$s.</item>
+    </plurals>
+    <plurals name="result_aborted">
+        <item quantity="one">The run stopped early. %1$d item was not attempted.</item>
+        <item quantity="other">The run stopped early. %1$d items were not attempted.</item>
+    </plurals>
+    <string name="outcome_skipped">Skipped</string>
+    <string name="outcome_access_denied">Access denied</string>
+    <string name="outcome_failed">Failed</string>
+
+    <string name="setting_show_expert">Show expert cleaners</string>
+    <string name="setting_show_expert_body">Lists cleaners that can remove data you may want to keep.</string>
+    <string name="whitelist_count">Entries: %1$d</string>
+    <string name="whitelist_empty">Nothing is protected yet. Use \"Never clean\" on a preview row to add it here.</string>
+    <string name="whitelist_kind_path">Path</string>
+    <string name="whitelist_kind_package">App</string>
+    <string name="run_log_empty">No runs have been logged yet.</string>
+</resources>
