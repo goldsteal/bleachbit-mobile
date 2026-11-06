@@ -22,7 +22,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import dev.goldsteal.bleachbit.R
@@ -39,6 +38,9 @@ enum class ScanNote {
     DOWNLOADS_OWN_FILES_ONLY,
     TRASH_SCAN_FAILED,
     DOWNLOADS_SCAN_FAILED,
+    LARGE_FILES_MEDIA_ONLY,
+    DUPLICATES_MEDIA_ONLY,
+    MEDIA_SCAN_FAILED,
 }
 
 data class ScanResult(
@@ -141,7 +143,7 @@ class DeviceScanner(private val context: Context) {
                     val name = c.getString(nameCol) ?: continue
                     val optionId = optionFor(name) ?: continue
                     val uri = ContentUris.withAppendedId(collection, c.getLong(idCol)).toString()
-                    val path = pathOf(c.getString(dataCol), c.getString(volCol), c.getString(relCol), name)
+                    val path = mediaPathOf(c.getString(dataCol), c.getString(volCol), c.getString(relCol), name)
                     add(
                         Finding(
                             id = "$optionId:$uri",
@@ -154,14 +156,5 @@ class DeviceScanner(private val context: Context) {
                 }
             }
         }
-    }
-
-    /** The path used for whitelist matching. Null when it cannot be known for sure. */
-    @Suppress("DEPRECATION")
-    private fun pathOf(data: String?, volume: String?, relative: String?, name: String): String? {
-        if (!data.isNullOrBlank()) return data
-        if (volume != MediaStore.VOLUME_EXTERNAL_PRIMARY || relative == null) return null
-        val root = Environment.getExternalStorageDirectory().absolutePath
-        return "$root/${relative.trimEnd('/')}/$name"
     }
 }

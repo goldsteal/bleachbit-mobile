@@ -24,16 +24,25 @@ import androidx.lifecycle.viewModelScope
 import dev.goldsteal.bleachbit.data.LastRun
 import dev.goldsteal.bleachbit.data.RunLogStore
 import dev.goldsteal.bleachbit.data.SettingsStore
+import dev.goldsteal.bleachbit.device.AppSizeReader
+import dev.goldsteal.bleachbit.device.AppSizeRow
 import dev.goldsteal.bleachbit.device.ConsentBridge
 import dev.goldsteal.bleachbit.device.DeviceActions
 import dev.goldsteal.bleachbit.device.DeviceScanner
+import dev.goldsteal.bleachbit.device.MediaIndex
 import dev.goldsteal.bleachbit.device.ScanNote
 import dev.goldsteal.bleachbit.engine.Assembly
 import dev.goldsteal.bleachbit.engine.Catalog
 import dev.goldsteal.bleachbit.engine.CleanExecutor
 import dev.goldsteal.bleachbit.engine.CommandRunner
 import dev.goldsteal.bleachbit.engine.CommandStatus
+import dev.goldsteal.bleachbit.engine.DEFAULT_DUPLICATE_COLLECTIONS
+import dev.goldsteal.bleachbit.engine.DEFAULT_LARGE_FILE_BYTES
+import dev.goldsteal.bleachbit.engine.DuplicateGroup
+import dev.goldsteal.bleachbit.engine.Duplicates
 import dev.goldsteal.bleachbit.engine.Finding
+import dev.goldsteal.bleachbit.engine.MediaCollection
+import dev.goldsteal.bleachbit.engine.MediaItem
 import dev.goldsteal.bleachbit.engine.NioPathLookup
 import dev.goldsteal.bleachbit.engine.Operation
 import dev.goldsteal.bleachbit.engine.OptionIds
@@ -47,20 +56,42 @@ import dev.goldsteal.bleachbit.engine.RunLog
 import dev.goldsteal.bleachbit.engine.Whitelist
 import dev.goldsteal.bleachbit.engine.WhitelistEntry
 import dev.goldsteal.bleachbit.engine.defaultChecked
+import dev.goldsteal.bleachbit.engine.largeFileFindings
 import dev.goldsteal.bleachbit.engine.minus
 import dev.goldsteal.bleachbit.engine.plus
+import dev.goldsteal.bleachbit.engine.sortedByCache
 import dev.goldsteal.bleachbit.engine.whitelistEntryFor
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { HOME, CLEAN, SCANNING, PREVIEW, RUNNING, RESULT, RUN_LOG, SETTINGS, WHITELIST }
+enum class Screen {
+    HOME, CLEAN, SCANNING, PREVIEW, DUPLICATES, APP_SIZES, RUNNING, RESULT, RUN_LOG, SETTINGS, WHITELIST, THRESHOLDS,
+}
+
+/** Which scan filled the review screen. */
+enum class ScanKind { CLEAN, LARGE_FILES, DUPLICATES }
+
+data class ScanProgress(val done: Int, val total: Int)
+
+data class AppSizesState(
+    val usageAccess: Boolean = false,
+    val loading: Boolean = false,
+    /** Sorted by cache, largest first. Null until loaded. */
+    val rows: List<AppSizeRow>? = null,
+    val showSystem: Boolean = false,
+)
 
 data class UiState(
     val screen: Screen = Screen.HOME,
@@ -70,20 +101,30 @@ data class UiState(
     val whitelist: Whitelist = Whitelist.EMPTY,
     val lastRun: LastRun? = null,
     val selectedOptions: Set<String> = emptySet(),
+    val scanKind: ScanKind = ScanKind.CLEAN,
+    val scanProgress: ScanProgress? = null,
     /** Rows the preview shows: scanned, present, not whitelisted. */
     val findings: List<Finding> = emptyList(),
     val policyErrors: List<PolicyError> = emptyList(),
     val checked: Set<String> = emptySet(),
     val notes: List<ScanNote> = emptyList(),
+    val duplicateGroups: List<DuplicateGroup> = emptyList(),
+    /** Duplicate copies the policy would allow deleting. The rest are shown as protected. */
+    val markable: Set<String> = emptySet(),
     val confirming: Boolean = false,
     val report: Report? = null,
     val runLog: String = "",
+    val appSizes: AppSizesState = AppSizesState(),
+    val largeFileBytes: Long = DEFAULT_LARGE_FILE_BYTES,
+    val duplicateCollections: Set<MediaCollection> = DEFAULT_DUPLICATE_COLLECTIONS,
 )
 
 class CleanViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = SettingsStore(app)
     private val runLogStore = RunLogStore(app.noBackupFilesDir)
     private val scanner = DeviceScanner(app)
+    private val media = MediaIndex(app)
+    private val appSizeReader = AppSizeReader(app)
     val consent = ConsentBridge()
     private val actions = DeviceActions(app, consent) { AppForeground.started }
     private val assembler = PlanAssembly()
@@ -97,11 +138,21 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
     /** Everything the last scan found, before policy and whitelist filtering. */
     private var rawFindings: List<Finding> = emptyList()
     private var scanUris: Set<String> = emptySet()
+    private var scanJob: Job? = null
+    private var appSizeJob: Job? = null
 
     init {
         viewModelScope.launch {
             settings.settings.collect { s ->
-                _state.update { it.copy(showExpert = s.showExpert, whitelist = s.whitelist, lastRun = s.lastRun) }
+                _state.update {
+                    it.copy(
+                        showExpert = s.showExpert,
+                        whitelist = s.whitelist,
+                        lastRun = s.lastRun,
+                        largeFileBytes = s.largeFileBytes,
+                        duplicateCollections = s.duplicateCollections,
+                    )
+                }
             }
         }
     }
@@ -117,11 +168,15 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value
         val target = when (s.screen) {
             Screen.HOME -> return false
-            Screen.RUNNING, Screen.SCANNING -> return true
-            Screen.PREVIEW -> Screen.CLEAN
-            Screen.WHITELIST -> Screen.SETTINGS
+            Screen.RUNNING -> return true
+            Screen.SCANNING -> {
+                cancelScan()
+                return true
+            }
+            Screen.PREVIEW -> if (s.scanKind == ScanKind.CLEAN) Screen.CLEAN else Screen.HOME
+            Screen.WHITELIST, Screen.THRESHOLDS -> Screen.SETTINGS
             Screen.RUN_LOG -> if (s.previous == Screen.RUN_LOG) Screen.HOME else s.previous
-            Screen.CLEAN, Screen.SETTINGS, Screen.RESULT -> Screen.HOME
+            Screen.CLEAN, Screen.SETTINGS, Screen.RESULT, Screen.DUPLICATES, Screen.APP_SIZES -> Screen.HOME
         }
         _state.update { it.copy(screen = target, previous = it.screen, confirming = false) }
         return true
@@ -135,32 +190,137 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setShowExpert(show) }
     }
 
+    fun setLargeFileBytes(bytes: Long) {
+        if (bytes <= 0) return
+        viewModelScope.launch { settings.setLargeFileBytes(bytes) }
+    }
+
+    /** At least one location stays selected. */
+    fun toggleDuplicateCollection(collection: MediaCollection) {
+        val current = _state.value.duplicateCollections
+        val next = if (collection in current) current - collection else current + collection
+        if (next.isEmpty()) return
+        _state.update { it.copy(duplicateCollections = next) }
+        viewModelScope.launch { settings.setDuplicateCollections(next) }
+    }
+
+    // Scans
+
     fun scan(mediaReadGranted: Boolean) {
         val selected = _state.value.selectedOptions
         if (selected.isEmpty()) return
-        go(Screen.SCANNING)
-        viewModelScope.launch {
+        startScan(ScanKind.CLEAN) {
             val result = scanner.scan(selected, mediaReadGranted)
-            rawFindings = result.findings
-            scanUris = result.mediaUris
+            showPreview(ScanKind.CLEAN, result.findings, result.notes)
+        }
+    }
+
+    fun findLargeFiles(mediaReadGranted: Boolean) {
+        val threshold = _state.value.largeFileBytes
+        startScan(ScanKind.LARGE_FILES) {
+            val notes = mutableListOf(ScanNote.LARGE_FILES_MEDIA_ONLY)
+            if (!mediaReadGranted) notes += ScanNote.MEDIA_READ_DENIED
+            val items = listMedia(MediaCollection.entries.toSet(), threshold, notes)
+            showPreview(ScanKind.LARGE_FILES, largeFileFindings(items, threshold), notes)
+        }
+    }
+
+    fun findDuplicates(mediaReadGranted: Boolean) {
+        val collections = _state.value.duplicateCollections
+        startScan(ScanKind.DUPLICATES) {
+            val notes = mutableListOf(ScanNote.DUPLICATES_MEDIA_ONLY)
+            if (!mediaReadGranted) notes += ScanNote.MEDIA_READ_DENIED
+            val items = listMedia(collections, minBytes = 1, notes)
+            val groups = withContext(Dispatchers.IO) {
+                val job = coroutineContext.job
+                Duplicates.find(
+                    items,
+                    hash = { item -> media.hash(item) { job.ensureActive() } },
+                    onProgress = { done, total -> _state.update { it.copy(scanProgress = ScanProgress(done, total)) } },
+                )
+            }
+            rawFindings = Duplicates.findings(groups)
+            scanUris = mediaUrisOf(rawFindings)
             val assembly = assembleAll()
-            val visible = visibleFindings(assembly)
+            val markable = visibleFindings(assembly).map { it.id }.toSet()
+            coroutineContext.ensureActive()
             _state.update {
                 it.copy(
-                    screen = Screen.PREVIEW,
-                    previous = Screen.CLEAN,
-                    findings = visible,
+                    screen = Screen.DUPLICATES,
+                    previous = Screen.HOME,
+                    scanProgress = null,
+                    findings = rawFindings,
                     policyErrors = assembly.policyErrors,
-                    checked = visible.filter(::defaultChecked).map { f -> f.id }.toSet(),
-                    notes = result.notes,
+                    duplicateGroups = groups,
+                    markable = markable,
+                    checked = Duplicates.defaultMarks(groups, markable),
+                    notes = notes,
                     report = null,
                 )
             }
         }
     }
 
+    /** Stops a scan. A cancelled scan deletes nothing. */
+    fun cancelScan() {
+        scanJob?.cancel()
+        scanJob = null
+        val origin = if (_state.value.scanKind == ScanKind.CLEAN) Screen.CLEAN else Screen.HOME
+        _state.update { it.copy(screen = origin, previous = Screen.HOME, scanProgress = null) }
+    }
+
+    private fun startScan(kind: ScanKind, block: suspend CoroutineScope.() -> Unit) {
+        if (scanJob?.isActive == true) return
+        _state.update { it.copy(screen = Screen.SCANNING, previous = it.screen, scanKind = kind, scanProgress = null) }
+        scanJob = viewModelScope.launch(block = block)
+    }
+
+    private suspend fun listMedia(
+        collections: Set<MediaCollection>,
+        minBytes: Long,
+        notes: MutableList<ScanNote>,
+    ): List<MediaItem> = withContext(Dispatchers.IO) {
+        try {
+            media.list(collections, minBytes)
+        } catch (_: SecurityException) {
+            notes += ScanNote.MEDIA_SCAN_FAILED
+            emptyList()
+        } catch (_: IllegalArgumentException) {
+            notes += ScanNote.MEDIA_SCAN_FAILED
+            emptyList()
+        }
+    }
+
+    private suspend fun showPreview(kind: ScanKind, findings: List<Finding>, notes: List<ScanNote>) {
+        rawFindings = findings
+        scanUris = mediaUrisOf(findings)
+        val assembly = assembleAll()
+        val visible = visibleFindings(assembly)
+        currentCoroutineContext().ensureActive()
+        _state.update {
+            it.copy(
+                screen = Screen.PREVIEW,
+                previous = if (kind == ScanKind.CLEAN) Screen.CLEAN else Screen.HOME,
+                scanProgress = null,
+                findings = visible,
+                policyErrors = assembly.policyErrors,
+                checked = visible.filter(::defaultChecked).map { f -> f.id }.toSet(),
+                notes = notes,
+                duplicateGroups = emptyList(),
+                markable = emptySet(),
+                report = null,
+            )
+        }
+    }
+
+    // Review
+
     fun toggleFinding(id: String) = _state.update {
-        it.copy(checked = if (id in it.checked) it.checked - id else it.checked + id)
+        if (it.screen == Screen.DUPLICATES) {
+            it.copy(checked = Duplicates.toggle(it.duplicateGroups, it.checked, it.markable, id))
+        } else {
+            it.copy(checked = if (id in it.checked) it.checked - id else it.checked + id)
+        }
     }
 
     fun canNeverClean(finding: Finding): Boolean = whitelistEntryFor(finding) != null
@@ -194,7 +354,12 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
     fun clean() {
         val s = _state.value
         if (s.checked.isEmpty()) return
-        _state.update { it.copy(confirming = false, screen = Screen.RUNNING, previous = Screen.PREVIEW) }
+        // The duplicate picker already refuses this; check again before anything is deleted.
+        if (s.screen == Screen.DUPLICATES && !Duplicates.keepsACopyOfEach(s.duplicateGroups, s.checked)) {
+            dismissConfirm()
+            return
+        }
+        _state.update { it.copy(confirming = false, screen = Screen.RUNNING, previous = s.screen) }
         val startedAt = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         viewModelScope.launch {
             val findings = rawFindings
@@ -211,7 +376,7 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
             val log = RunLog.format(startedAt, findings, assembly, report)
             withContext(Dispatchers.IO) { runLogStore.append(log) }
             settings.recordRun(System.currentTimeMillis(), report.bytesFreed)
-            _state.update { it.copy(screen = Screen.RESULT, previous = Screen.PREVIEW, report = report) }
+            _state.update { it.copy(screen = Screen.RESULT, previous = s.screen, report = report) }
         }
     }
 
@@ -223,6 +388,45 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // App sizes
+
+    fun openAppSizes() {
+        go(Screen.APP_SIZES)
+        refreshAppSizes(reload = false)
+    }
+
+    fun reloadAppSizes() = refreshAppSizes(reload = true)
+
+    fun setShowSystemApps(show: Boolean) = _state.update { it.copy(appSizes = it.appSizes.copy(showSystem = show)) }
+
+    /** Called when the activity resumes, such as after the user returns from the usage-access screen. */
+    fun onResume() {
+        if (_state.value.screen == Screen.APP_SIZES) refreshAppSizes(reload = false)
+    }
+
+    private fun refreshAppSizes(reload: Boolean) {
+        val access = appSizeReader.hasUsageAccess()
+        if (!access) {
+            appSizeJob?.cancel()
+            _state.update { it.copy(appSizes = it.appSizes.copy(usageAccess = false, loading = false, rows = null)) }
+            return
+        }
+        val current = _state.value.appSizes
+        _state.update { it.copy(appSizes = it.appSizes.copy(usageAccess = true)) }
+        if (!reload && (current.rows != null || current.loading)) return
+        appSizeJob?.cancel()
+        _state.update { it.copy(appSizes = it.appSizes.copy(loading = true)) }
+        appSizeJob = viewModelScope.launch {
+            val rows = withContext(Dispatchers.IO) {
+                val job = coroutineContext.job
+                val read = appSizeReader.read { job.ensureActive() }
+                val byPackage = read.associateBy { it.size.packageName }
+                sortedByCache(read.map { it.size }).mapNotNull { byPackage[it.packageName] }
+            }
+            _state.update { it.copy(appSizes = it.appSizes.copy(loading = false, rows = rows)) }
+        }
+    }
+
     private suspend fun assembleAll(): Assembly = withContext(Dispatchers.IO) {
         assembler.assemble(rawFindings, rawFindings.map { it.id }.toSet(), context())
     }
@@ -231,6 +435,9 @@ class CleanViewModel(app: Application) : AndroidViewModel(app) {
         val planned = assembly.plan.items.map { it.findingId }.toSet()
         return rawFindings.filter { it.id in planned }
     }
+
+    private fun mediaUrisOf(findings: List<Finding>): Set<String> =
+        findings.mapNotNull { (it.operation as? Operation.DeleteMedia)?.uri }.toSet()
 
     private fun context() = PolicyContext(
         userId = Process.myUid() / 100_000,

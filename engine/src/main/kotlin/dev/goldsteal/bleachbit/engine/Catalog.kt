@@ -17,12 +17,14 @@
 
 package dev.goldsteal.bleachbit.engine
 
-/** Option ids used by the Phase 2 cleaners. */
 object OptionIds {
     const val MEDIA_TRASH = "media.trash"
     const val DOWNLOADS_PARTIAL = "downloads.partial"
     const val DOWNLOADS_APK = "downloads.apk"
     const val CLIPBOARD_CURRENT = "clipboard.current"
+    const val APPS_CACHE_REPORT = "apps.cache_report"
+    const val STORAGE_LARGE_FILES = "storage.large_files"
+    const val STORAGE_DUPLICATES = "storage.duplicates"
 }
 
 object Catalog {
@@ -58,6 +60,16 @@ object Catalog {
                 Option(OptionIds.CLIPBOARD_CURRENT, "Current clipboard", Privilege.STANDARD, Risk.SAFE),
             ),
         ),
+        Cleaner(
+            id = "storage",
+            label = "Storage",
+            description = "Tools that list files and app sizes. You pick what goes.",
+            options = listOf(
+                Option(OptionIds.APPS_CACHE_REPORT, "App sizes", Privilege.USAGE_ACCESS, Risk.SAFE, tool = true),
+                Option(OptionIds.STORAGE_LARGE_FILES, "Large file", Privilege.STANDARD, Risk.REVIEW, tool = true),
+                Option(OptionIds.STORAGE_DUPLICATES, "Duplicate copy", Privilege.STANDARD, Risk.REVIEW, tool = true),
+            ),
+        ),
     )
 
     val options: List<Option> = cleaners.flatMap { it.options }
@@ -66,7 +78,7 @@ object Catalog {
 
     /** Options a user at [privilege] can run. Expert options stay hidden unless [showExpert]. */
     fun visibleOptions(privilege: Privilege, showExpert: Boolean): List<Option> = options.filter {
-        it.privilege.ordinal <= privilege.ordinal && (showExpert || it.risk != Risk.EXPERT)
+        !it.tool && it.privilege.ordinal <= privilege.ordinal && (showExpert || it.risk != Risk.EXPERT)
     }
 }
 

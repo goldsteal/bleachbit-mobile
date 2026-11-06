@@ -16,13 +16,21 @@
  */
 package dev.goldsteal.bleachbit.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.goldsteal.bleachbit.engine.Duplicates
 import dev.goldsteal.bleachbit.engine.Finding
+import dev.goldsteal.bleachbit.engine.MediaItem
 import dev.goldsteal.bleachbit.engine.Operation
 import dev.goldsteal.bleachbit.engine.Option
 import dev.goldsteal.bleachbit.engine.Privilege
@@ -84,5 +92,50 @@ class ScreensTest {
         rule.onNodeWithTag("finding:f1").performClick()
         assertEquals(listOf("f1"), toggled)
         rule.onNodeWithTag(TAG_CLEAN).assertIsNotEnabled()
+    }
+
+    @Test
+    fun aDuplicateGroupCannotBeEmptiedFromThePicker() {
+        val copies = (1..2).map {
+            MediaItem("content://media/external/images/media/$it", "v:$it", "/sdcard/DCIM/$it.jpg", "$it.jpg", 10, it * 1000L)
+        }
+        val groups = Duplicates.find(copies, hash = { "same" })
+        val ids = groups.single().findingIds
+        val markable = ids.toSet()
+        rule.setContent {
+            var checked by remember { mutableStateOf(Duplicates.defaultMarks(groups, markable)) }
+            DuplicatesScreen(
+                groups = groups,
+                checked = checked,
+                markable = markable,
+                notes = emptyList(),
+                confirming = false,
+                onToggle = { checked = Duplicates.toggle(groups, checked, markable, it) },
+                onClean = {},
+                onConfirm = {},
+                onDismiss = {},
+                onBack = {},
+            )
+        }
+        // The newest copy is kept, the older one is checked.
+        rule.onNodeWithTag("copy:${ids[0]}").assertIsOff()
+        rule.onNodeWithTag("copy:${ids[1]}").assertIsOn()
+        // Checking the kept copy is refused.
+        rule.onNodeWithTag("copy:${ids[0]}").performClick()
+        rule.onNodeWithTag("copy:${ids[0]}").assertIsOff()
+        // Swapping works: uncheck the older copy, then the newer one can be checked.
+        rule.onNodeWithTag("copy:${ids[1]}").performClick()
+        rule.onNodeWithTag("copy:${ids[0]}").performClick()
+        rule.onNodeWithTag("copy:${ids[0]}").assertIsOn()
+        rule.onNodeWithTag("copy:${ids[1]}").assertIsOff()
+        rule.onNodeWithTag(TAG_CLEAN).assertIsEnabled()
+    }
+
+    @Test
+    fun aScanCanBeCancelled() {
+        var cancelled = false
+        rule.setContent { ProgressScreen("Scanning", onCancel = { cancelled = true }) }
+        rule.onNodeWithTag(TAG_CANCEL_SCAN).performClick()
+        assertEquals(true, cancelled)
     }
 }

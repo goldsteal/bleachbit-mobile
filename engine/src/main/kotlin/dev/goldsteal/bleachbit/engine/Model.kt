@@ -47,6 +47,8 @@ data class Option(
     val privilege: Privilege,
     val risk: Risk,
     val warning: String? = null,
+    /** A tool has its own screen and is not on the Clean list. */
+    val tool: Boolean = false,
 )
 
 data class Cleaner(

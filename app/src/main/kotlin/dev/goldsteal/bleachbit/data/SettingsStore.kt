@@ -24,6 +24,10 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.goldsteal.bleachbit.engine.DEFAULT_DUPLICATE_COLLECTIONS
+import dev.goldsteal.bleachbit.engine.DEFAULT_LARGE_FILE_BYTES
+import dev.goldsteal.bleachbit.engine.MediaCollection
+import dev.goldsteal.bleachbit.engine.MediaCollectionCodec
 import dev.goldsteal.bleachbit.engine.Whitelist
 import dev.goldsteal.bleachbit.engine.WhitelistCodec
 import java.io.IOException
@@ -39,6 +43,8 @@ data class Settings(
     val whitelist: Whitelist,
     val showExpert: Boolean,
     val lastRun: LastRun?,
+    val largeFileBytes: Long,
+    val duplicateCollections: Set<MediaCollection>,
 )
 
 class SettingsStore(context: Context) {
@@ -56,6 +62,14 @@ class SettingsStore(context: Context) {
         store.edit { it[SHOW_EXPERT] = show }
     }
 
+    suspend fun setLargeFileBytes(bytes: Long) {
+        store.edit { it[LARGE_FILE_BYTES] = bytes }
+    }
+
+    suspend fun setDuplicateCollections(collections: Set<MediaCollection>) {
+        store.edit { it[DUPLICATE_COLLECTIONS] = MediaCollectionCodec.encode(collections) }
+    }
+
     suspend fun recordRun(atMillis: Long, bytesFreed: Long) {
         store.edit {
             it[LAST_RUN_AT] = atMillis
@@ -69,6 +83,9 @@ class SettingsStore(context: Context) {
             whitelist = prefs[WHITELIST]?.let(WhitelistCodec::decode) ?: Whitelist.EMPTY,
             showExpert = prefs[SHOW_EXPERT] ?: false,
             lastRun = at?.let { LastRun(it, prefs[LAST_FREED] ?: 0) },
+            largeFileBytes = prefs[LARGE_FILE_BYTES]?.takeIf { it > 0 } ?: DEFAULT_LARGE_FILE_BYTES,
+            duplicateCollections = prefs[DUPLICATE_COLLECTIONS]?.let(MediaCollectionCodec::decode)
+                ?.takeIf { it.isNotEmpty() } ?: DEFAULT_DUPLICATE_COLLECTIONS,
         )
     }
 
@@ -77,5 +94,7 @@ class SettingsStore(context: Context) {
         val SHOW_EXPERT = booleanPreferencesKey("show_expert")
         val LAST_RUN_AT = longPreferencesKey("last_run_at")
         val LAST_FREED = longPreferencesKey("last_freed")
+        val LARGE_FILE_BYTES = longPreferencesKey("large_file_bytes")
+        val DUPLICATE_COLLECTIONS = stringPreferencesKey("duplicate_collections")
     }
 }

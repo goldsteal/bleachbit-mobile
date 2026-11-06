@@ -42,6 +42,11 @@ class MainActivity : ComponentActivity() {
         AppForeground.started = true
     }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.onResume()
+    }
+
     override fun onStop() {
         AppForeground.started = false
         super.onStop()

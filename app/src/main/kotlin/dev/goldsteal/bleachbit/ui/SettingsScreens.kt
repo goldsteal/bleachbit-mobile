@@ -25,10 +25,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -41,6 +44,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.goldsteal.bleachbit.R
+import dev.goldsteal.bleachbit.engine.LARGE_FILE_THRESHOLDS
+import dev.goldsteal.bleachbit.engine.MediaCollection
 import dev.goldsteal.bleachbit.engine.Whitelist
 import dev.goldsteal.bleachbit.engine.WhitelistEntry
 import dev.goldsteal.bleachbit.engine.entries
@@ -51,6 +56,7 @@ fun SettingsScreen(
     whitelistSize: Int,
     onShowExpert: (Boolean) -> Unit,
     onWhitelist: () -> Unit,
+    onThresholds: () -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(topBar = { TopBar(stringResource(R.string.title_settings), onBack) }) { padding ->
@@ -79,6 +85,15 @@ fun SettingsScreen(
                     stringResource(R.string.whitelist_count, whitelistSize),
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onThresholds)
+                    .padding(vertical = 12.dp),
+            ) {
+                Text(stringResource(R.string.title_thresholds), style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.thresholds_summary), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -135,4 +150,68 @@ fun RunLogScreen(text: String, onBack: () -> Unit) {
             }
         }
     }
+}
+
+/** Large-file size and the places the duplicate scan reads. */
+@Composable
+fun ThresholdsScreen(
+    largeFileBytes: Long,
+    duplicateCollections: Set<MediaCollection>,
+    onLargeFileBytes: (Long) -> Unit,
+    onToggleCollection: (MediaCollection) -> Unit,
+    onBack: () -> Unit,
+) {
+    Scaffold(topBar = { TopBar(stringResource(R.string.title_thresholds), onBack) }) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(ScreenPadding),
+        ) {
+            Text(stringResource(R.string.large_file_threshold), style = MaterialTheme.typography.titleSmall)
+            for (bytes in LARGE_FILE_THRESHOLDS) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = bytes == largeFileBytes,
+                            role = Role.RadioButton,
+                            onClick = { onLargeFileBytes(bytes) },
+                        )
+                        .padding(vertical = 4.dp),
+                ) {
+                    RadioButton(selected = bytes == largeFileBytes, onClick = null)
+                    Text(formatSize(bytes), modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+            Text(
+                stringResource(R.string.duplicate_locations),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            Text(stringResource(R.string.duplicate_locations_body), style = MaterialTheme.typography.bodySmall)
+            for (collection in MediaCollection.entries) {
+                val on = collection in duplicateCollections
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(value = on, role = Role.Checkbox, onValueChange = { onToggleCollection(collection) })
+                        .padding(vertical = 4.dp),
+                ) {
+                    Checkbox(checked = on, onCheckedChange = null)
+                    Text(stringResource(collection.label()), modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+        }
+    }
+}
+
+fun MediaCollection.label(): Int = when (this) {
+    MediaCollection.IMAGES -> R.string.collection_images
+    MediaCollection.VIDEO -> R.string.collection_video
+    MediaCollection.AUDIO -> R.string.collection_audio
+    MediaCollection.DOWNLOADS -> R.string.collection_downloads
 }

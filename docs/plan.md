@@ -373,7 +373,6 @@ Implemented, not yet run on a device. `./gradlew :app:assembleDebug :app:assembl
 - A Standard app sees only the Downloads it created itself, so `downloads.partial` and `downloads.apk` find little until Phase 4's all-files access. The preview says so.
 - `media.trash` needs the media read permissions to list other apps' trash. Without them the preview says only this app's trash is shown.
 - Cleaner labels come from the engine in English. They are not string resources yet.
-- The scanning screen has a spinner but no cancel button yet.
 
 - `media.trash`, `downloads.partial`, `downloads.apk`, `clipboard.current`
 - Preview, per-row uncheck, confirm, result
@@ -384,6 +383,12 @@ Implemented, not yet run on a device. `./gradlew :app:assembleDebug :app:assembl
 Done when, on a non-rooted current Android device, a person can preview trash and partial downloads, uncheck one row, confirm, and see that row survive and the others go. The clipboard clears while the app is in front. A whitelisted path is absent from the preview.
 
 ### Phase 3 — Insight
+
+Implemented, not yet run on a device. Grouping, the keep-one rule, large-file selection and app-size sorting are host-tested in `engine` (`InsightTest`). A Compose UI test checks that the duplicate picker refuses to mark the last kept copy, and one checks the scan's cancel button; like Phase 2's, they are built but not yet run. Known gaps:
+
+- Large files and duplicates read MediaStore, so at Standard privilege they see photos, video, audio, and only this app's downloads. Other file types wait for Phase 4's all-files access. The screens say so.
+- Duplicate hashing runs in the view model with a progress bar and cancel, not yet in a foreground service. Phase 4 adds the service.
+- Partial photo access (Android 14's "selected photos") is reported as media access denied.
 
 - Usage-access request and the app-size list, sorted by cache, opening system App info
 - Large-file picker at the configured threshold

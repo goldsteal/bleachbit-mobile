@@ -44,6 +44,9 @@ fun HomeScreen(
     privilege: Privilege,
     lastRun: LastRun?,
     onClean: () -> Unit,
+    onLargeFiles: () -> Unit,
+    onDuplicates: () -> Unit,
+    onAppSizes: () -> Unit,
     onSettings: () -> Unit,
     onRunLog: () -> Unit,
 ) {
@@ -78,6 +81,16 @@ fun HomeScreen(
             Text(stringResource(R.string.home_body), style = MaterialTheme.typography.bodyMedium)
             Button(onClick = onClean, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.action_clean))
+            }
+            Text(stringResource(R.string.home_tools), style = MaterialTheme.typography.titleSmall)
+            OutlinedButton(onClick = onLargeFiles, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.title_large_files))
+            }
+            OutlinedButton(onClick = onDuplicates, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.title_duplicates))
+            }
+            OutlinedButton(onClick = onAppSizes, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.title_app_sizes))
             }
             OutlinedButton(onClick = onRunLog, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.title_run_log))

@@ -18,12 +18,17 @@ package dev.goldsteal.bleachbit.ui
 
 import android.text.format.Formatter
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -50,3 +55,19 @@ fun TopBar(title: String, onBack: (() -> Unit)? = null) {
 
 @Composable
 fun formatSize(bytes: Long): String = Formatter.formatShortFileSize(LocalContext.current, bytes)
+
+/** The in-app confirm before a delete. Android may show its own dialog after this one. */
+@Composable
+fun ConfirmDeleteDialog(count: Int, totalBytes: Long, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.confirm_title)) },
+        text = { Text(pluralStringResource(R.plurals.confirm_body, count, count, formatSize(totalBytes))) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.testTag(TAG_CONFIRM)) {
+                Text(stringResource(R.string.action_delete))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}

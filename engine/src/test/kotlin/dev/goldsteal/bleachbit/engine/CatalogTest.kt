@@ -35,8 +35,9 @@ class CatalogTest {
     )
 
     @Test
-    fun phaseTwoOptionsAreAllStandard() {
-        val ids = Catalog.options.map { it.id }.toSet()
+    fun cleanListOptionsAreAllStandard() {
+        val cleanList = Catalog.options.filter { !it.tool }
+        val ids = cleanList.map { it.id }.toSet()
         assertEquals(
             setOf(
                 OptionIds.MEDIA_TRASH,
@@ -46,8 +47,21 @@ class CatalogTest {
             ),
             ids,
         )
-        assertTrue(Catalog.options.all { it.privilege == Privilege.STANDARD })
-        assertEquals(ids.size, Catalog.options.size)
+        assertTrue(cleanList.all { it.privilege == Privilege.STANDARD })
+        assertEquals(Catalog.options.size, Catalog.options.map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun phaseThreeTools() {
+        val tools = Catalog.options.filter { it.tool }.associate { it.id to it.privilege }
+        assertEquals(
+            mapOf(
+                OptionIds.APPS_CACHE_REPORT to Privilege.USAGE_ACCESS,
+                OptionIds.STORAGE_LARGE_FILES to Privilege.STANDARD,
+                OptionIds.STORAGE_DUPLICATES to Privilege.STANDARD,
+            ),
+            tools,
+        )
     }
 
     @Test

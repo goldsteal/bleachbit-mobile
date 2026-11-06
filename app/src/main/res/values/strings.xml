@@ -67,4 +67,44 @@
     <string name="whitelist_kind_path">Path</string>
     <string name="whitelist_kind_package">App</string>
     <string name="run_log_empty">No runs have been logged yet.</string>
+    <string name="home_tools">Find space</string>
+    <string name="title_large_files">Large files</string>
+    <string name="title_duplicates">Duplicates</string>
+    <string name="title_app_sizes">App sizes</string>
+    <string name="title_thresholds">Thresholds</string>
+    <string name="action_reload">Reload</string>
+    <string name="action_grant_usage_access">Open usage access settings</string>
+    <string name="loading">Loading…</string>
+
+    <string name="finding_duplicates">Comparing files…</string>
+    <string name="hash_progress">Checked %1$d of %2$d files</string>
+    <string name="note_large_files_media_only">Android lets this app list photos, videos, audio, and downloads it created. Other files are not listed.</string>
+    <string name="note_duplicates_media_only">Only files of the same size are compared, by their full contents. Android lets this app read photos, videos, audio, and downloads it created.</string>
+    <string name="note_media_scan_failed">Some media could not be read.</string>
+
+    <string name="no_duplicates">No duplicate files were found.</string>
+    <string name="duplicates_help">Checked copies are deleted. The newest copy in each group starts unchecked, and every group keeps at least one copy.</string>
+    <plurals name="duplicate_group_title">
+        <item quantity="one">%1$d copy, %2$s each</item>
+        <item quantity="other">%1$d copies, %2$s each</item>
+    </plurals>
+    <string name="copy_detail">Modified %1$s · %2$s</string>
+    <string name="copy_keep">Kept</string>
+    <string name="copy_delete">Will be deleted</string>
+    <string name="copy_protected">Protected by Never clean</string>
+
+    <string name="usage_access_explain">The app-size list uses usage access to read the storage figures Android keeps for each app. It reads sizes only. It cannot delete another app\'s files. Turn on usage access for BleachBit Mobile, then come back.</string>
+    <string name="app_sizes_explain">Figures from Android\'s storage stats, sorted by cache. Cache is files an app can recreate. Data is logins, databases, and settings, and is never cleared from here. Tap an app to open its App info, where you can clear its cache.</string>
+    <string name="app_size_line">Cache %1$s · Data %2$s · App %3$s</string>
+    <string name="show_system_apps">Show system apps</string>
+    <string name="open_app_info">Open App info</string>
+
+    <string name="thresholds_summary">Large-file size and duplicate locations</string>
+    <string name="large_file_threshold">List files at least this large</string>
+    <string name="duplicate_locations">Look for duplicates in</string>
+    <string name="duplicate_locations_body">At least one stays selected.</string>
+    <string name="collection_images">Images</string>
+    <string name="collection_video">Videos</string>
+    <string name="collection_audio">Audio</string>
+    <string name="collection_downloads">Downloads</string>
 </resources>

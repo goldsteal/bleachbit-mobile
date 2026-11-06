@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -61,11 +60,12 @@ fun PreviewScreen(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     onBack: () -> Unit,
+    title: String = stringResource(R.string.title_preview),
 ) {
     val selected = findings.filter { it.id in checked }
     val total = selected.sumOf { it.sizeBytes }
     Scaffold(
-        topBar = { TopBar(stringResource(R.string.title_preview), onBack) },
+        topBar = { TopBar(title, onBack) },
         bottomBar = {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Text(
@@ -118,21 +118,7 @@ fun PreviewScreen(
             }
         }
     }
-    if (confirming) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(R.string.confirm_title)) },
-            text = {
-                Text(pluralStringResource(R.plurals.confirm_body, selected.size, selected.size, formatSize(total)))
-            },
-            confirmButton = {
-                TextButton(onClick = onConfirm, modifier = Modifier.testTag(TAG_CONFIRM)) {
-                    Text(stringResource(R.string.action_delete))
-                }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
-        )
-    }
+    if (confirming) ConfirmDeleteDialog(selected.size, total, onConfirm, onDismiss)
 }
 
 @Composable
@@ -170,6 +156,9 @@ fun ScanNote.text(): Int = when (this) {
     ScanNote.DOWNLOADS_OWN_FILES_ONLY -> R.string.note_downloads_own_only
     ScanNote.TRASH_SCAN_FAILED -> R.string.note_trash_failed
     ScanNote.DOWNLOADS_SCAN_FAILED -> R.string.note_downloads_failed
+    ScanNote.LARGE_FILES_MEDIA_ONLY -> R.string.note_large_files_media_only
+    ScanNote.DUPLICATES_MEDIA_ONLY -> R.string.note_duplicates_media_only
+    ScanNote.MEDIA_SCAN_FAILED -> R.string.note_media_scan_failed
 }
 
 const val TAG_CLEAN = "clean"
